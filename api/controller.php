@@ -1,4 +1,6 @@
 <?php
+/** a damn wrong and filthy implementation of a controller, just for hacking purposes */
+
 
 // Upload controller
 if (!empty($_POST)) {
@@ -14,5 +16,3 @@ elseif (isset($_GET['key'])) {
 else {
 
 }
-
-?>
