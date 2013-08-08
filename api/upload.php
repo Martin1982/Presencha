@@ -3,28 +3,82 @@
 
 date_default_timezone_set('Europe/Amsterdam');
 
+/**
+ * Manager for uploaded files and conversion from PDF to images
+ */
 class manager
 {
+    /**
+     * @var int Maximum file size (in MB's)
+     */
+    public $maxFilesize = 3;
 
+    /**
+     * Get the storage directory for the slides
+     * @return string directory where slides are stored
+     */
     public function getSlidesDir()
     {
         return dirname(__FILE__).'/slides';
     }
 
+    /**
+     * Generate a random slides key
+     * @return string key
+     */
     public function generateKey()
     {
         return md5(microtime().'presencha');
     }
 
-    public function upload($fileName, $title)
+    /**
+     * Validate an uploaded file that it is available, has no errors
+     * has the mime-type of a pdf and doesn't exceeed the maximum size
+     * @param $field
+     * @return bool|string
+     */
+    protected function validateUpload($field)
     {
+        if (!isset($field['tmp_name'])) {
+            return 'No upload file available';
+        }
+        
+        if ($field['error'] > 0) {
+            return 'Error while uploading';
+        }
+        
+        if (!in_array($field['type'], array('application/pdf', 'application/octet-stream'))) {
+            return 'Please upload a valid pdf file';
+        }
+        
+        $maxSize = ($this->maxFilesize * 1024 * 1024);
+        if ($field['size'] > $maxSize) {
+            return 'Max upload size of 3 MB exceeded';
+        }
+        
+        return true;
+    }
+
+    /**
+     * Upload the pdf
+     *
+     * @param array $field 
+     * @param string $title 
+     * @return void
+     */
+    public function upload($field, $title)
+    {
+        
+        if (($error = $this->validateUpload($field)) !== true) {
+            $this->showError($error);
+        }
         $meta = array();
-        $pageCount = $this->getPageCount($fileName);
+        $pageCount = $this->getPageCount($field['tmp_name']);
 
         $meta['slideCount'] = $pageCount;
-        $meta['tite'] = $title;
+        $meta['title'] = $title;
 
-        $meta = $this->convertPdfToImages($fileName, $pageCount, $meta);
+        $meta = $this->convertPdfToImages($field['tmp_name'], $pageCount, $meta);
         $metaFile = $this->writeMetaFile($meta);
 
 
@@ -35,6 +89,11 @@ class manager
         ));
     }
 
+    /**
+     * Write the file containing the presentation's metadata
+     * @param $meta
+     * @return string
+     */
     public function writeMetaFile($meta)
     {
         $fileName = $this->getSlidesDir() .'/'.$meta['key'].'/meta.json';
@@ -43,12 +102,24 @@ class manager
     }
 
     // Not 100% correct but it works most of the time
+    /**
+     * Get the number of pages
+     * @param $fileName
+     * @return int
+     */
     public function getPageCount($fileName)
     {
         $pdftext = file_get_contents($fileName);
         return preg_match_all("/\/Page\W/", $pdftext, $dummy);
     }
 
+    /**
+     * Convert the PDF to a single image per page
+     * @param $fileName
+     * @param $pages
+     * @param $meta
+     * @return array
+     */
     public function convertPdfToImages($fileName, $pages, $meta)
     {
         $key = $this->generateKey();
@@ -70,6 +141,13 @@ class manager
         return $meta;
     }
 
+    /**
+     * Convert the image to the correct format
+     * @param $fileName
+     * @param $page
+     * @param $slideshowPath
+     * @return string
+     */
     protected function convertImage($fileName, $page, $slideshowPath)
     {
         $im = new Imagick;
@@ -84,14 +162,27 @@ class manager
 
         return 'slide'. ($page + 1) . '.png';
     }
+
+
+    /**
+     * Exit with an error
+     * @param $message
+     * @return void
+     */
+    protected function showError($message)
+    {
+        header("HTTP/1.0 404 Not Found");
+        echo $message;
+        exit();
+    }
 }
 
-
-// MAIN
-        
+/**
+ * Bootstrapping
+ */
 if (isset($_POST) && !empty($_POST)) {
     $manager = new Manager();
-    echo $manager->upload($_FILES['slideshow']['tmp_name'], $_POST['title']);
+    echo $manager->upload($_FILES['slideshow'], $_POST['title']);
 } else {
     header('Content-type: text/html');
     ?><!doctype html>

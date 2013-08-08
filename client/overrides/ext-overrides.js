@@ -103,6 +103,10 @@ Ext.data.Store.override({
     },
 });
 
-
-
-
+//Fix "generate" bug
+Ext.io.Naming.override({
+	generateClientId: function() {
+	    return Ext.util.UUIDGenerator.generate();
+	}
+});
+>>>>>>> upstream/master
